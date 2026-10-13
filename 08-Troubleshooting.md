@@ -13,6 +13,8 @@
 | Duplicates in SQL after rerun | No pre-copy script | Add `TRUNCATE TABLE …` pre-copy script, or use Upsert |
 | Expression error **"The expression … cannot be evaluated because property 'childItems' doesn't exist"** | *Child items* not added to Get Metadata field list, or activity name mismatch | Add field; names in `activity('…')` are case-sensitive and must match exactly |
 | ForEach "Items must be an array" | Passed the whole output object | Use `.output.Value` (Filter) or `.output.childItems` (Get Metadata) |
+| **"Parameter p_TargetContainer was not found under PL_02…"** | Pipeline parameter missing or misspelled (case-sensitive), or added to the dataset instead of the pipeline | Click empty main canvas → Parameters tab → add/fix `p_TargetContainer`; pick it from the dynamic-content list instead of typing; Publish before Trigger now |
+| **InvalidTemplate "property 'message' cannot be selected"** (LogFailure) | LogFailure wired with Success/Completion so it ran after a *successful* copy (`error` is null) | Make the arrow **Upon Failure** (red); use `coalesce(activity('CopyToSql').error?.message,'No error message')` |
 | Execute Pipeline fails in triggered run "pipeline not found" | Child not published | Publish all |
 | Trigger doesn't fire | Not published / not started / start time in past with no recurrence | Publish; Manage → Triggers → Start |
 | Storage event trigger can't be created | Event Grid provider not registered | Subscription → Resource providers → Microsoft.EventGrid → Register |
