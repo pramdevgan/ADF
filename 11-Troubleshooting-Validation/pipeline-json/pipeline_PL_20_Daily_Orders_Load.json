@@ -1,0 +1,436 @@
+{
+  "name": "PL_20_Daily_Orders_Load",
+  "properties": {
+    "description": "Daily orders load: file check -> staging -> fact -> validation gate -> log",
+    "parameters": {
+      "p_LoadDate": {
+        "type": "string",
+        "defaultValue": "2026-10-01"
+      }
+    },
+    "variables": {
+      "v_FileName": {
+        "type": "String"
+      }
+    },
+    "annotations": [
+      "module3",
+      "orders"
+    ],
+    "activities": [
+      {
+        "name": "SetFileName",
+        "type": "SetVariable",
+        "dependsOn": [],
+        "typeProperties": {
+          "variableName": "v_FileName",
+          "value": {
+            "value": "@concat('orders_', replace(pipeline().parameters.p_LoadDate,'-',''), '.csv')",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "CheckFileExists",
+        "type": "GetMetadata",
+        "dependsOn": [
+          {
+            "activity": "SetFileName",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.01:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "dataset": {
+            "referenceName": "DS_Orders_Csv",
+            "type": "DatasetReference",
+            "parameters": {
+              "p_file": {
+                "value": "@variables('v_FileName')",
+                "type": "Expression"
+              }
+            }
+          },
+          "fieldList": [
+            "exists",
+            "size",
+            "lastModified"
+          ],
+          "storeSettings": {
+            "type": "AzureBlobStorageReadSettings",
+            "enablePartitionDiscovery": false
+          },
+          "formatSettings": {
+            "type": "DelimitedTextReadSettings"
+          }
+        }
+      },
+      {
+        "name": "IfFileMissing",
+        "type": "IfCondition",
+        "dependsOn": [
+          {
+            "activity": "CheckFileExists",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "expression": {
+            "value": "@not(activity('CheckFileExists').output.exists)",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "Fail_FileNotFound",
+              "type": "Fail",
+              "dependsOn": [],
+              "typeProperties": {
+                "message": {
+                  "value": "@concat('FILE_NOT_FOUND: input/orders/', variables('v_FileName'), ' not found for LoadDate ', pipeline().parameters.p_LoadDate)",
+                  "type": "Expression"
+                },
+                "errorCode": "404"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "CopyToStaging",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "IfFileMissing",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.01:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "additionalColumns": [
+              {
+                "name": "SourceFile",
+                "value": "$$FILEPATH"
+              },
+              {
+                "name": "RunId",
+                "value": {
+                  "value": "@pipeline().RunId",
+                  "type": "Expression"
+                }
+              }
+            ],
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": false
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "preCopyScript": "TRUNCATE TABLE stg.Orders",
+            "writeBehavior": "insert",
+            "sqlWriterUseTableLock": false
+          },
+          "enableStaging": false,
+          "translator": {
+            "type": "TabularTranslator",
+            "mappings": [
+              {
+                "source": {
+                  "name": "OrderID",
+                  "type": "String"
+                },
+                "sink": {
+                  "name": "OrderID",
+                  "type": "String"
+                }
+              },
+              {
+                "source": {
+                  "name": "OrderDate",
+                  "type": "String"
+                },
+                "sink": {
+                  "name": "OrderDate",
+                  "type": "String"
+                }
+              },
+              {
+                "source": {
+                  "name": "CustomerID",
+                  "type": "String"
+                },
+                "sink": {
+                  "name": "CustomerID",
+                  "type": "String"
+                }
+              },
+              {
+                "source": {
+                  "name": "ProductID",
+                  "type": "String"
+                },
+                "sink": {
+                  "name": "ProductID",
+                  "type": "String"
+                }
+              },
+              {
+                "source": {
+                  "name": "Quantity",
+                  "type": "String"
+                },
+                "sink": {
+                  "name": "Quantity",
+                  "type": "String"
+                }
+              },
+              {
+                "source": {
+                  "name": "UnitPrice",
+                  "type": "String"
+                },
+                "sink": {
+                  "name": "UnitPrice",
+                  "type": "String"
+                }
+              },
+              {
+                "source": {
+                  "name": "Status",
+                  "type": "String"
+                },
+                "sink": {
+                  "name": "Status",
+                  "type": "String"
+                }
+              },
+              {
+                "source": {
+                  "name": "SourceFile",
+                  "type": "String"
+                },
+                "sink": {
+                  "name": "SourceFile",
+                  "type": "String"
+                }
+              },
+              {
+                "source": {
+                  "name": "RunId",
+                  "type": "String"
+                },
+                "sink": {
+                  "name": "RunId",
+                  "type": "String"
+                }
+              }
+            ]
+          }
+        },
+        "inputs": [
+          {
+            "referenceName": "DS_Orders_Csv",
+            "type": "DatasetReference",
+            "parameters": {
+              "p_file": {
+                "value": "@variables('v_FileName')",
+                "type": "Expression"
+              }
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "DS_Sql_Stg_Orders",
+            "type": "DatasetReference"
+          }
+        ]
+      },
+      {
+        "name": "LoadFact",
+        "type": "SqlServerStoredProcedure",
+        "dependsOn": [
+          {
+            "activity": "CopyToStaging",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.01:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "linkedServiceName": {
+          "referenceName": "LS_AzureSqlDb",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "storedProcedureName": "[dbo].[usp_Load_Orders]",
+          "storedProcedureParameters": {
+            "LoadDate": {
+              "value": {
+                "value": "@pipeline().parameters.p_LoadDate",
+                "type": "Expression"
+              },
+              "type": "String"
+            },
+            "RunId": {
+              "value": {
+                "value": "@pipeline().RunId",
+                "type": "Expression"
+              },
+              "type": "String"
+            }
+          }
+        }
+      },
+      {
+        "name": "ValidateLoad",
+        "type": "SqlServerStoredProcedure",
+        "dependsOn": [
+          {
+            "activity": "LoadFact",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.01:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "linkedServiceName": {
+          "referenceName": "LS_AzureSqlDb",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "storedProcedureName": "[audit].[usp_Validate_Load]",
+          "storedProcedureParameters": {
+            "LoadDate": {
+              "value": {
+                "value": "@pipeline().parameters.p_LoadDate",
+                "type": "Expression"
+              },
+              "type": "String"
+            },
+            "RunId": {
+              "value": {
+                "value": "@pipeline().RunId",
+                "type": "Expression"
+              },
+              "type": "String"
+            },
+            "SourceRows": {
+              "value": {
+                "value": "@activity('CopyToStaging').output.rowsRead",
+                "type": "Expression"
+              },
+              "type": "Int32"
+            }
+          }
+        }
+      },
+      {
+        "name": "LogSuccess",
+        "type": "SqlServerStoredProcedure",
+        "dependsOn": [
+          {
+            "activity": "ValidateLoad",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "policy": {
+          "timeout": "0.01:00:00",
+          "retry": 0,
+          "retryIntervalInSeconds": 30,
+          "secureOutput": false,
+          "secureInput": false
+        },
+        "linkedServiceName": {
+          "referenceName": "LS_AzureSqlDb",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "storedProcedureName": "[audit].[usp_Log_Run]",
+          "storedProcedureParameters": {
+            "PipelineName": {
+              "value": {
+                "value": "@pipeline().Pipeline",
+                "type": "Expression"
+              },
+              "type": "String"
+            },
+            "RunId": {
+              "value": {
+                "value": "@pipeline().RunId",
+                "type": "Expression"
+              },
+              "type": "String"
+            },
+            "LoadDate": {
+              "value": {
+                "value": "@pipeline().parameters.p_LoadDate",
+                "type": "Expression"
+              },
+              "type": "String"
+            },
+            "Status": {
+              "value": "Succeeded",
+              "type": "String"
+            },
+            "RowsRead": {
+              "value": {
+                "value": "@activity('CopyToStaging').output.rowsRead",
+                "type": "Expression"
+              },
+              "type": "Int32"
+            },
+            "RowsCopied": {
+              "value": {
+                "value": "@activity('CopyToStaging').output.rowsCopied",
+                "type": "Expression"
+              },
+              "type": "Int32"
+            },
+            "Message": {
+              "value": "Load and validation passed",
+              "type": "String"
+            }
+          }
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "DS_Sql_Stg_Orders",
+  "properties": {
+    "linkedServiceName": {
+      "referenceName": "LS_AzureSqlDb",
+      "type": "LinkedServiceReference"
+    },
+    "type": "AzureSqlTable",
+    "typeProperties": {
+      "schema": "stg",
+      "table": "Orders"
+    },
+    "schema": []
+  }
+}

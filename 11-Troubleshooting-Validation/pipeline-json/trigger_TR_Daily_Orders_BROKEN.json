@@ -1,0 +1,30 @@
+{
+  "name": "TR_Daily_Orders",
+  "properties": {
+    "description": "Daily orders trigger",
+    "annotations": [
+      "module3"
+    ],
+    "runtimeState": "Stopped",
+    "pipelines": [
+      {
+        "pipelineReference": {
+          "referenceName": "PL_20_Daily_Orders_Load",
+          "type": "PipelineReference"
+        },
+        "parameters": {
+          "p_LoadDate": "@formatDateTime(trigger().scheduledTime,'dd-MM-yyyy')"
+        }
+      }
+    ],
+    "type": "ScheduleTrigger",
+    "typeProperties": {
+      "recurrence": {
+        "frequency": "Minute",
+        "interval": 5,
+        "startTime": "2026-10-14T00:00:00",
+        "timeZone": "India Standard Time"
+      }
+    }
+  }
+}

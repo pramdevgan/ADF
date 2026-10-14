@@ -1,0 +1,32 @@
+{
+  "name": "DS_Orders_Csv",
+  "properties": {
+    "linkedServiceName": {
+      "referenceName": "LS_BlobStorage",
+      "type": "LinkedServiceReference"
+    },
+    "parameters": {
+      "p_file": {
+        "type": "string",
+        "defaultValue": "orders_20261001.csv"
+      }
+    },
+    "type": "DelimitedText",
+    "typeProperties": {
+      "location": {
+        "type": "AzureBlobStorageLocation",
+        "fileName": {
+          "value": "@dataset().p_file",
+          "type": "Expression"
+        },
+        "folderPath": "orders",
+        "container": "input"
+      },
+      "columnDelimiter": ",",
+      "escapeChar": "\\",
+      "firstRowAsHeader": true,
+      "quoteChar": "\""
+    },
+    "schema": []
+  }
+}

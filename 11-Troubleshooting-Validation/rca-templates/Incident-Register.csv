@@ -1,0 +1,8 @@
+IncidentID,Date,DetectedAt,ResolvedAt,Severity,Category,Pipeline,RunId,FailedActivity,ErrorCode,ErrorMessage,ImmediateCause,RootCause,Fix,PreventiveAction,Owner
+INC-001,2026-10-03,07:05,07:40,Sev2,Missing file,PL_20_Daily_Orders_Load,<paste RunId>,Fail_FileNotFound,404,FILE_NOT_FOUND: input/orders/orders_20261003.csv not found,File arrived as Orders_20261003.csv (case),No written file-naming contract with vendor,Vendor re-sent file + rerun,File contract + 06:30 arrival check,On-call DE
+INC-002,,,,,Connectivity,PL_20_Daily_Orders_Load,,,,,,,,,
+INC-003,,,,,Authentication,PL_20_Daily_Orders_Load,,,,,,,,,
+INC-004,,,,,Trigger,PL_20_Daily_Orders_Load,,,,,,,,,
+INC-005a,,,,,Data mapping - schema drift,PL_20_Daily_Orders_Load,,,,,,,,,
+INC-005b,,,,,Data mapping - data types,PL_20_Daily_Orders_Load,,,,,,,,,
+INC-006,,,,,Data quality (green but wrong),PL_20_Daily_Orders_Load,,,,,,,,,
