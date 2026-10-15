@@ -1,0 +1,27 @@
+{
+    "name": "TR_Hourly_HealthCheck",
+    "properties": {
+        "description": "Hourly health check of previous business date.",
+        "annotations": [],
+        "pipelines": [
+            {
+                "pipelineReference": {
+                    "referenceName": "PL_HealthCheck",
+                    "type": "PipelineReference"
+                },
+                "parameters": {
+                    "pRunDate": "@formatDateTime(addDays(convertFromUtc(trigger().scheduledTime, 'India Standard Time'), -1), 'yyyyMMdd')"
+                }
+            }
+        ],
+        "type": "ScheduleTrigger",
+        "typeProperties": {
+            "recurrence": {
+                "frequency": "Hour",
+                "interval": 1,
+                "startTime": "2026-12-01T03:15:00",
+                "timeZone": "India Standard Time"
+            }
+        }
+    }
+}

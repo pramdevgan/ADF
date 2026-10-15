@@ -1,0 +1,21 @@
+cust_id,customer_name,city,segment,signup_date
+C1001,Aarav Sharma,Gurugram,Retail,2025-01-01
+C1002,Vivaan Verma,Delhi,Corporate,2025-02-02
+C1003,Aditya Gupta,Mumbai,SMB,2025-03-03
+C1004,Ananya Iyer,Bengaluru,Retail,2025-04-04
+C1005,Diya Reddy,Pune,Corporate,2025-05-05
+C1006,Ishaan Nair,Hyderabad,SMB,2025-06-06
+C1007,Kavya Mehta,Chennai,Retail,2025-07-07
+C1008,Rohan Kapoor,Kolkata,Corporate,2025-08-08
+C1009,Saanvi Singh,Gurugram,SMB,2025-09-09
+C1010,Arjun Das,Delhi,Retail,2025-10-10
+C1011,Meera Joshi,Mumbai,Corporate,2025-11-11
+C1012,Kabir Sharma,Bengaluru,SMB,2025-12-12
+C1013,Riya Verma,Pune,Retail,2025-01-13
+C1014,Vihaan Gupta,Hyderabad,Corporate,2025-02-14
+C1015,Anika Iyer,Chennai,SMB,2025-03-15
+C1016,Reyansh Reddy,Kolkata,Retail,2025-04-16
+C1017,Myra Nair,Gurugram,Corporate,2025-05-17
+C1018,Advik Mehta,Delhi,SMB,2025-06-18
+C1019,Tara Kapoor,Mumbai,Retail,2025-07-19
+C1020,Neel Singh,Bengaluru,Corporate,2025-08-20

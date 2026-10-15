@@ -1,0 +1,500 @@
+{
+    "name": "PL_Ingest_Sales",
+    "properties": {
+        "description": "Child: landing/sales/sales_<pRunDate>.csv -> stg.Sales -> dbo.FactSales (idempotent). Logs start/end and raises incident on failure.",
+        "activities": [
+            {
+                "name": "SP_LogStart",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "0.00:10:00",
+                    "retry": 2,
+                    "retryIntervalInSeconds": 60,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "linkedServiceName": {
+                    "referenceName": "LS_AzureSql",
+                    "type": "LinkedServiceReference"
+                },
+                "typeProperties": {
+                    "storedProcedureName": "[ops].[usp_LogRunStart]",
+                    "storedProcedureParameters": {
+                        "RunId": {
+                            "value": {
+                                "value": "@pipeline().RunId",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "PipelineName": {
+                            "value": {
+                                "value": "@pipeline().Pipeline",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "TriggerName": {
+                            "value": {
+                                "value": "@pipeline().TriggerName",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "RunDate": {
+                            "value": {
+                                "value": "@pipeline().parameters.pRunDate",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        }
+                    }
+                }
+            },
+            {
+                "name": "Copy_Sales_To_Stg",
+                "type": "Copy",
+                "dependsOn": [
+                    {
+                        "activity": "SP_LogStart",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.01:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "DelimitedTextSource",
+                        "storeSettings": {
+                            "type": "AzureBlobFSReadSettings",
+                            "recursive": false,
+                            "enablePartitionDiscovery": false
+                        },
+                        "formatSettings": {
+                            "type": "DelimitedTextReadSettings"
+                        }
+                    },
+                    "sink": {
+                        "type": "AzureSqlSink",
+                        "preCopyScript": "TRUNCATE TABLE stg.Sales",
+                        "writeBehavior": "insert",
+                        "sqlWriterUseTableLock": false,
+                        "disableMetricsCollection": false
+                    },
+                    "enableStaging": false,
+                    "translator": {
+                        "type": "TabularTranslator",
+                        "mappings": [
+                            {
+                                "source": {
+                                    "name": "order_id"
+                                },
+                                "sink": {
+                                    "name": "OrderId"
+                                }
+                            },
+                            {
+                                "source": {
+                                    "name": "order_date"
+                                },
+                                "sink": {
+                                    "name": "OrderDate"
+                                }
+                            },
+                            {
+                                "source": {
+                                    "name": "customer_id"
+                                },
+                                "sink": {
+                                    "name": "CustomerId"
+                                }
+                            },
+                            {
+                                "source": {
+                                    "name": "product_id"
+                                },
+                                "sink": {
+                                    "name": "ProductId"
+                                }
+                            },
+                            {
+                                "source": {
+                                    "name": "quantity"
+                                },
+                                "sink": {
+                                    "name": "Quantity"
+                                }
+                            },
+                            {
+                                "source": {
+                                    "name": "unit_price"
+                                },
+                                "sink": {
+                                    "name": "UnitPrice"
+                                }
+                            },
+                            {
+                                "source": {
+                                    "name": "amount"
+                                },
+                                "sink": {
+                                    "name": "Amount"
+                                }
+                            },
+                            {
+                                "source": {
+                                    "name": "store_code"
+                                },
+                                "sink": {
+                                    "name": "StoreCode"
+                                }
+                            }
+                        ],
+                        "typeConversion": true,
+                        "typeConversionSettings": {
+                            "allowDataTruncation": false,
+                            "treatBooleanAsNumber": false
+                        }
+                    }
+                },
+                "inputs": [
+                    {
+                        "referenceName": "DS_ADLS_Csv",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "pContainer": "landing",
+                            "pFolder": "sales",
+                            "pFileName": {
+                                "value": "@concat('sales_', pipeline().parameters.pRunDate, '.csv')",
+                                "type": "Expression"
+                            }
+                        }
+                    }
+                ],
+                "outputs": [
+                    {
+                        "referenceName": "DS_AzureSql_Table",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "pSchema": "stg",
+                            "pTable": "Sales"
+                        }
+                    }
+                ]
+            },
+            {
+                "name": "SP_Load_FactSales",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "Copy_Sales_To_Stg",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.00:10:00",
+                    "retry": 2,
+                    "retryIntervalInSeconds": 60,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "linkedServiceName": {
+                    "referenceName": "LS_AzureSql",
+                    "type": "LinkedServiceReference"
+                },
+                "typeProperties": {
+                    "storedProcedureName": "[dbo].[usp_Load_Sales]",
+                    "storedProcedureParameters": {
+                        "RunDate": {
+                            "value": {
+                                "value": "@pipeline().parameters.pRunDate",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "RunId": {
+                            "value": {
+                                "value": "@pipeline().RunId",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        }
+                    }
+                }
+            },
+            {
+                "name": "SP_LogSuccess",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "SP_Load_FactSales",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.00:10:00",
+                    "retry": 2,
+                    "retryIntervalInSeconds": 60,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "linkedServiceName": {
+                    "referenceName": "LS_AzureSql",
+                    "type": "LinkedServiceReference"
+                },
+                "typeProperties": {
+                    "storedProcedureName": "[ops].[usp_LogRunEnd]",
+                    "storedProcedureParameters": {
+                        "RunId": {
+                            "value": {
+                                "value": "@pipeline().RunId",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "Status": {
+                            "value": "Succeeded",
+                            "type": "String"
+                        },
+                        "PipelineName": {
+                            "value": {
+                                "value": "@pipeline().Pipeline",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "RunDate": {
+                            "value": {
+                                "value": "@pipeline().parameters.pRunDate",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "RowsRead": {
+                            "value": {
+                                "value": "@activity('Copy_Sales_To_Stg').output.rowsRead",
+                                "type": "Expression"
+                            },
+                            "type": "Int64"
+                        },
+                        "RowsWritten": {
+                            "value": {
+                                "value": "@activity('Copy_Sales_To_Stg').output.rowsCopied",
+                                "type": "Expression"
+                            },
+                            "type": "Int64"
+                        }
+                    }
+                }
+            },
+            {
+                "name": "SP_LogFailure_Copy",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "Copy_Sales_To_Stg",
+                        "dependencyConditions": [
+                            "Failed"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.00:10:00",
+                    "retry": 2,
+                    "retryIntervalInSeconds": 60,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "linkedServiceName": {
+                    "referenceName": "LS_AzureSql",
+                    "type": "LinkedServiceReference"
+                },
+                "typeProperties": {
+                    "storedProcedureName": "[ops].[usp_LogRunEnd]",
+                    "storedProcedureParameters": {
+                        "RunId": {
+                            "value": {
+                                "value": "@pipeline().RunId",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "Status": {
+                            "value": "Failed",
+                            "type": "String"
+                        },
+                        "FailedActivity": {
+                            "value": "Copy_Sales_To_Stg",
+                            "type": "String"
+                        },
+                        "ErrorCode": {
+                            "value": "ERR_COPY_SALES",
+                            "type": "String"
+                        },
+                        "ErrorMessage": {
+                            "value": {
+                                "value": "@activity('Copy_Sales_To_Stg').error.message",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "PipelineName": {
+                            "value": {
+                                "value": "@pipeline().Pipeline",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "RunDate": {
+                            "value": {
+                                "value": "@pipeline().parameters.pRunDate",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        }
+                    }
+                }
+            },
+            {
+                "name": "Fail_Copy",
+                "type": "Fail",
+                "dependsOn": [
+                    {
+                        "activity": "SP_LogFailure_Copy",
+                        "dependencyConditions": [
+                            "Succeeded",
+                            "Failed"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "message": {
+                        "value": "@concat('Copy_Sales_To_Stg failed: ', activity('Copy_Sales_To_Stg').error.message)",
+                        "type": "Expression"
+                    },
+                    "errorCode": "ERR_COPY_SALES"
+                }
+            },
+            {
+                "name": "SP_LogFailure_Load",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "SP_Load_FactSales",
+                        "dependencyConditions": [
+                            "Failed"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.00:10:00",
+                    "retry": 2,
+                    "retryIntervalInSeconds": 60,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "linkedServiceName": {
+                    "referenceName": "LS_AzureSql",
+                    "type": "LinkedServiceReference"
+                },
+                "typeProperties": {
+                    "storedProcedureName": "[ops].[usp_LogRunEnd]",
+                    "storedProcedureParameters": {
+                        "RunId": {
+                            "value": {
+                                "value": "@pipeline().RunId",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "Status": {
+                            "value": "Failed",
+                            "type": "String"
+                        },
+                        "FailedActivity": {
+                            "value": "SP_Load_FactSales",
+                            "type": "String"
+                        },
+                        "ErrorCode": {
+                            "value": "ERR_LOAD_SALES",
+                            "type": "String"
+                        },
+                        "ErrorMessage": {
+                            "value": {
+                                "value": "@activity('SP_Load_FactSales').error.message",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "PipelineName": {
+                            "value": {
+                                "value": "@pipeline().Pipeline",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "RunDate": {
+                            "value": {
+                                "value": "@pipeline().parameters.pRunDate",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        }
+                    }
+                }
+            },
+            {
+                "name": "Fail_Load",
+                "type": "Fail",
+                "dependsOn": [
+                    {
+                        "activity": "SP_LogFailure_Load",
+                        "dependencyConditions": [
+                            "Succeeded",
+                            "Failed"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "message": {
+                        "value": "@concat('SP_Load_FactSales failed: ', activity('SP_Load_FactSales').error.message)",
+                        "type": "Expression"
+                    },
+                    "errorCode": "ERR_LOAD_SALES"
+                }
+            }
+        ],
+        "parameters": {
+            "pRunDate": {
+                "type": "string",
+                "defaultValue": "20261014"
+            }
+        },
+        "folder": {
+            "name": "Ingest"
+        },
+        "annotations": [
+            "prod-support-lab"
+        ]
+    }
+}

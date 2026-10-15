@@ -1,0 +1,14 @@
+{
+    "name": "LS_ADLS",
+    "properties": {
+        "type": "AzureBlobFS",
+        "description": "ADLS Gen2 landing zone. Auth = system-assigned managed identity (no URL credential = MI). Needs 'Storage Blob Data Contributor' on the storage account.",
+        "typeProperties": {
+            "url": "https://stadfps<initials><digits>.dfs.core.windows.net/"
+        },
+        "connectVia": {
+            "referenceName": "AutoResolveIntegrationRuntime",
+            "type": "IntegrationRuntimeReference"
+        }
+    }
+}

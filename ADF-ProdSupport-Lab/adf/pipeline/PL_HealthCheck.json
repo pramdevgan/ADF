@@ -1,0 +1,93 @@
+{
+    "name": "PL_HealthCheck",
+    "properties": {
+        "description": "Runs ops.usp_RunHealthChecks; fails (=> Azure Monitor alert) when any check FAILs.",
+        "activities": [
+            {
+                "name": "Lookup_RunHealthChecks",
+                "type": "Lookup",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "0.00:10:00",
+                    "retry": 2,
+                    "retryIntervalInSeconds": 60,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "AzureSqlSource",
+                        "sqlReaderStoredProcedureName": "[ops].[usp_RunHealthChecks]",
+                        "storedProcedureParameters": {
+                            "RunDate": {
+                                "type": "String",
+                                "value": {
+                                    "value": "@pipeline().parameters.pRunDate",
+                                    "type": "Expression"
+                                }
+                            }
+                        },
+                        "queryTimeout": "00:10:00",
+                        "partitionOption": "None"
+                    },
+                    "dataset": {
+                        "referenceName": "DS_AzureSql_Table",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "pSchema": "ops",
+                            "pTable": "HealthCheckResult"
+                        }
+                    },
+                    "firstRowOnly": true
+                }
+            },
+            {
+                "name": "If_AnyCheckFailed",
+                "type": "IfCondition",
+                "dependsOn": [
+                    {
+                        "activity": "Lookup_RunHealthChecks",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "expression": {
+                        "value": "@greater(int(activity('Lookup_RunHealthChecks').output.firstRow.FailCount), 0)",
+                        "type": "Expression"
+                    },
+                    "ifTrueActivities": [
+                        {
+                            "name": "Fail_HealthCheck",
+                            "type": "Fail",
+                            "dependsOn": [],
+                            "userProperties": [],
+                            "typeProperties": {
+                                "message": {
+                                    "value": "@concat('Health check FAILED for ', pipeline().parameters.pRunDate, ': ', string(activity('Lookup_RunHealthChecks').output.firstRow.FailCount), ' check(s) failed. CheckRunId=', activity('Lookup_RunHealthChecks').output.firstRow.CheckRunId, '. Query ops.HealthCheckResult.')",
+                                    "type": "Expression"
+                                },
+                                "errorCode": "ERR_HEALTHCHECK"
+                            }
+                        }
+                    ]
+                }
+            }
+        ],
+        "parameters": {
+            "pRunDate": {
+                "type": "string",
+                "defaultValue": "20261014"
+            }
+        },
+        "folder": {
+            "name": "Operations"
+        },
+        "annotations": [
+            "prod-support-lab"
+        ]
+    }
+}

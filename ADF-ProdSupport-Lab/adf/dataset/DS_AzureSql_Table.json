@@ -1,0 +1,30 @@
+{
+    "name": "DS_AzureSql_Table",
+    "properties": {
+        "description": "Generic parameterised Azure SQL table",
+        "linkedServiceName": {
+            "referenceName": "LS_AzureSql",
+            "type": "LinkedServiceReference"
+        },
+        "parameters": {
+            "pSchema": {
+                "type": "string"
+            },
+            "pTable": {
+                "type": "string"
+            }
+        },
+        "type": "AzureSqlTable",
+        "typeProperties": {
+            "schema": {
+                "value": "@dataset().pSchema",
+                "type": "Expression"
+            },
+            "table": {
+                "value": "@dataset().pTable",
+                "type": "Expression"
+            }
+        },
+        "schema": []
+    }
+}

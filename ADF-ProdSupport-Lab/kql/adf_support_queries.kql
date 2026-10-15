@@ -1,0 +1,136 @@
+// =====================================================================
+// TIP: if a column used below does not exist in your workspace, run:  <TableName> | getschema
+// adf_support_queries.kql
+// Run in: Log Analytics workspace  law-adf-ps  > Logs
+// Pre-req: ADF Diagnostic setting -> "Resource specific" destination tables
+//          ADFPipelineRun, ADFActivityRun, ADFTriggerRun
+// Note: logs arrive with a few minutes delay (ingestion latency). If a query
+//       returns nothing right after a run, wait 5-10 min - that's normal.
+// Note: ADFPipelineRun writes MULTIPLE rows per run (Queued/InProgress/final).
+//       Always take the latest row per RunId with arg_max().
+// =====================================================================
+
+
+// ---------- K1. Failed pipeline runs - last 24h (L1 morning check) ----------
+ADFPipelineRun
+| where TimeGenerated > ago(24h)
+| summarize arg_max(TimeGenerated, *) by RunId
+| where Status == "Failed"
+| project End, PipelineName, RunId, FailureType, Parameters, DurationMin = datetime_diff('minute', End, Start)
+| order by End desc
+
+
+// ---------- K2. Which activity failed and why (drill-down for one run) ----------
+// paste the RunId of the FAILED pipeline (child run id for child failures)
+let runId = "<paste-pipeline-run-id>";
+ADFActivityRun
+| where PipelineRunId == runId
+| summarize arg_max(TimeGenerated, *) by ActivityRunId
+| project Start, End, ActivityName, ActivityType, Status, ErrorCode, FailureType, ErrorMessage
+| order by Start asc
+
+
+// ---------- K3. All activity failures last 7 days with error text ----------
+ADFActivityRun
+| where TimeGenerated > ago(7d) and Status == "Failed"
+| summarize arg_max(TimeGenerated, *) by ActivityRunId
+| project End, PipelineName, ActivityName, ActivityType, ErrorCode, FailureType,
+          ErrorMessage = substring(ErrorMessage, 0, 300), PipelineRunId
+| order by End desc
+
+
+// ---------- K4. Top error codes (input for Problem Management) ----------
+ADFActivityRun
+| where TimeGenerated > ago(30d) and Status == "Failed"
+| summarize arg_max(TimeGenerated, *) by ActivityRunId
+| summarize Failures = count(), LastSeen = max(End), Pipelines = make_set(PipelineName)
+          by ErrorCode, ActivityType
+| order by Failures desc
+
+
+// ---------- K5. Success rate per pipeline (health / SLO) ----------
+ADFPipelineRun
+| where TimeGenerated > ago(7d)
+| summarize arg_max(TimeGenerated, *) by RunId
+| where Status in ("Succeeded","Failed","Cancelled")
+| summarize Total = count(), Failed = countif(Status == "Failed"),
+            SuccessPct = round(100.0 * countif(Status == "Succeeded") / count(), 1)
+          by PipelineName
+| order by SuccessPct asc
+
+
+// ---------- K6. Duration anomaly: runs slower than mean + 2*stdev ----------
+let history = ADFPipelineRun
+| where TimeGenerated > ago(14d)
+| summarize arg_max(TimeGenerated, *) by RunId
+| where Status == "Succeeded"
+| extend DurSec = datetime_diff('second', End, Start)
+| summarize AvgSec = avg(DurSec), StdSec = stdev(DurSec) by PipelineName;
+ADFPipelineRun
+| where TimeGenerated > ago(1d)
+| summarize arg_max(TimeGenerated, *) by RunId
+| extend DurSec = datetime_diff('second', End, Start)
+| join kind=inner history on PipelineName
+| where DurSec > AvgSec + 2 * StdSec
+| project PipelineName, RunId, Status, DurSec, AvgSec = round(AvgSec,0), Threshold = round(AvgSec + 2*StdSec,0)
+
+
+// ---------- K7. SLA / freshness: master has NOT succeeded in last 26h ----------
+// (catches the silent failure: trigger stopped -> nothing runs -> no "failed" alert!)
+let lastOk = toscalar(
+    ADFPipelineRun
+    | where PipelineName == "PL_Master_Daily" and Status == "Succeeded"
+    | summarize max(End));
+print LastSuccess = lastOk, HoursSince = datetime_diff('hour', now(), lastOk),
+      Breach = iff(isnull(lastOk) or datetime_diff('hour', now(), lastOk) > 26, "YES", "no")
+
+
+// ---------- K8. Trigger runs (did the schedule actually fire?) ----------
+ADFTriggerRun
+| where TimeGenerated > ago(3d)
+| summarize arg_max(TimeGenerated, *) by TriggerId
+| project TriggerTime = TimeGenerated, TriggerName, TriggerType, Status, TriggerFailureType, Properties
+| order by TriggerTime desc
+
+
+// ---------- K9. Parent -> child correlation (master and its children) ----------
+// Child runs record the parent in Predecessors (JSON). Find children of a master run:
+let masterRunId = "<paste-master-run-id>";
+ADFPipelineRun
+| where TimeGenerated > ago(3d)
+| summarize arg_max(TimeGenerated, *) by RunId
+| where tostring(Predecessors) has masterRunId or RunId == masterRunId
+| project Start, End, PipelineName, RunId, Status, FailureType
+| order by Start asc
+
+
+// ---------- K10. LOG ALERT query (use in Azure Monitor > Alert rule > Custom log search) ----------
+// Fires per failed run; dimension columns give a meaningful alert payload.
+ADFPipelineRun
+| where Status == "Failed"
+| summarize arg_max(TimeGenerated, *) by RunId
+| project TimeGenerated, PipelineName, RunId, FailureType
+
+
+// ---------- K11. Who changed the factory? (control-plane audit) ----------
+// Requires: Subscription Activity Log exported to this workspace
+// (Monitor > Activity log > Export Activity Logs > Diagnostic setting to law-adf-ps)
+AzureActivity
+| where TimeGenerated > ago(2d)
+| where ResourceProviderValue =~ "MICROSOFT.DATAFACTORY" or OperationNameValue has "roleAssignments" or ResourceProviderValue =~ "MICROSOFT.KEYVAULT"
+| project TimeGenerated, Caller, OperationNameValue, ActivityStatusValue, _ResourceId
+| order by TimeGenerated desc
+
+
+// ---------- K12. Who changed a Key Vault SECRET? (data-plane audit) ----------
+// Secret changes are data-plane operations - they do NOT appear in the Activity Log.
+// Requires: Key Vault > Diagnostic settings > "AuditEvent" -> law-adf-ps
+AzureDiagnostics
+| where ResourceProvider == "MICROSOFT.KEYVAULT"
+| where OperationName in ("SecretSet", "SecretGet")
+| project TimeGenerated, OperationName, id_s, identity_claim_upn_s, CallerIPAddress, ResultSignature
+| order by TimeGenerated desc
+
+
+// ---------- K0. Column names differ? Inspect any table schema ----------
+// ADFTriggerRun | getschema

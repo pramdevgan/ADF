@@ -1,0 +1,27 @@
+{
+    "name": "LS_AzureSql",
+    "properties": {
+        "type": "AzureSqlDatabase",
+        "description": "Azure SQL DB. SQL auth user 'adfloader'; password pulled at runtime from Key Vault.",
+        "typeProperties": {
+            "server": "sql-adf-ps-<initials>.database.windows.net",
+            "database": "sqldb-retail",
+            "encrypt": "mandatory",
+            "trustServerCertificate": false,
+            "authenticationType": "SQL",
+            "userName": "adfloader",
+            "password": {
+                "type": "AzureKeyVaultSecret",
+                "store": {
+                    "referenceName": "LS_KeyVault",
+                    "type": "LinkedServiceReference"
+                },
+                "secretName": "sql-adfloader-password"
+            }
+        },
+        "connectVia": {
+            "referenceName": "AutoResolveIntegrationRuntime",
+            "type": "IntegrationRuntimeReference"
+        }
+    }
+}

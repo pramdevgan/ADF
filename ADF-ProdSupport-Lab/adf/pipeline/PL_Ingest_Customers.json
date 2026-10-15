@@ -1,0 +1,469 @@
+{
+    "name": "PL_Ingest_Customers",
+    "properties": {
+        "description": "Child: landing/customers/customers_<pRunDate>.csv -> stg.Customers -> dbo.DimCustomer (MERGE).",
+        "activities": [
+            {
+                "name": "SP_LogStart",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "0.00:10:00",
+                    "retry": 2,
+                    "retryIntervalInSeconds": 60,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "linkedServiceName": {
+                    "referenceName": "LS_AzureSql",
+                    "type": "LinkedServiceReference"
+                },
+                "typeProperties": {
+                    "storedProcedureName": "[ops].[usp_LogRunStart]",
+                    "storedProcedureParameters": {
+                        "RunId": {
+                            "value": {
+                                "value": "@pipeline().RunId",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "PipelineName": {
+                            "value": {
+                                "value": "@pipeline().Pipeline",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "TriggerName": {
+                            "value": {
+                                "value": "@pipeline().TriggerName",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "RunDate": {
+                            "value": {
+                                "value": "@pipeline().parameters.pRunDate",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        }
+                    }
+                }
+            },
+            {
+                "name": "Copy_Customers_To_Stg",
+                "type": "Copy",
+                "dependsOn": [
+                    {
+                        "activity": "SP_LogStart",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.01:00:00",
+                    "retry": 0,
+                    "retryIntervalInSeconds": 30,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "source": {
+                        "type": "DelimitedTextSource",
+                        "storeSettings": {
+                            "type": "AzureBlobFSReadSettings",
+                            "recursive": false,
+                            "enablePartitionDiscovery": false
+                        },
+                        "formatSettings": {
+                            "type": "DelimitedTextReadSettings"
+                        }
+                    },
+                    "sink": {
+                        "type": "AzureSqlSink",
+                        "preCopyScript": "TRUNCATE TABLE stg.Customers",
+                        "writeBehavior": "insert",
+                        "sqlWriterUseTableLock": false,
+                        "disableMetricsCollection": false
+                    },
+                    "enableStaging": false,
+                    "translator": {
+                        "type": "TabularTranslator",
+                        "mappings": [
+                            {
+                                "source": {
+                                    "name": "customer_id"
+                                },
+                                "sink": {
+                                    "name": "CustomerId"
+                                }
+                            },
+                            {
+                                "source": {
+                                    "name": "customer_name"
+                                },
+                                "sink": {
+                                    "name": "CustomerName"
+                                }
+                            },
+                            {
+                                "source": {
+                                    "name": "city"
+                                },
+                                "sink": {
+                                    "name": "City"
+                                }
+                            },
+                            {
+                                "source": {
+                                    "name": "segment"
+                                },
+                                "sink": {
+                                    "name": "Segment"
+                                }
+                            },
+                            {
+                                "source": {
+                                    "name": "signup_date"
+                                },
+                                "sink": {
+                                    "name": "SignupDate"
+                                }
+                            }
+                        ],
+                        "typeConversion": true,
+                        "typeConversionSettings": {
+                            "allowDataTruncation": false,
+                            "treatBooleanAsNumber": false
+                        }
+                    }
+                },
+                "inputs": [
+                    {
+                        "referenceName": "DS_ADLS_Csv",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "pContainer": "landing",
+                            "pFolder": "customers",
+                            "pFileName": {
+                                "value": "@concat('customers_', pipeline().parameters.pRunDate, '.csv')",
+                                "type": "Expression"
+                            }
+                        }
+                    }
+                ],
+                "outputs": [
+                    {
+                        "referenceName": "DS_AzureSql_Table",
+                        "type": "DatasetReference",
+                        "parameters": {
+                            "pSchema": "stg",
+                            "pTable": "Customers"
+                        }
+                    }
+                ]
+            },
+            {
+                "name": "SP_Load_DimCustomer",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "Copy_Customers_To_Stg",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.00:10:00",
+                    "retry": 2,
+                    "retryIntervalInSeconds": 60,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "linkedServiceName": {
+                    "referenceName": "LS_AzureSql",
+                    "type": "LinkedServiceReference"
+                },
+                "typeProperties": {
+                    "storedProcedureName": "[dbo].[usp_Load_Customers]",
+                    "storedProcedureParameters": {
+                        "RunId": {
+                            "value": {
+                                "value": "@pipeline().RunId",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        }
+                    }
+                }
+            },
+            {
+                "name": "SP_LogSuccess",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "SP_Load_DimCustomer",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.00:10:00",
+                    "retry": 2,
+                    "retryIntervalInSeconds": 60,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "linkedServiceName": {
+                    "referenceName": "LS_AzureSql",
+                    "type": "LinkedServiceReference"
+                },
+                "typeProperties": {
+                    "storedProcedureName": "[ops].[usp_LogRunEnd]",
+                    "storedProcedureParameters": {
+                        "RunId": {
+                            "value": {
+                                "value": "@pipeline().RunId",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "Status": {
+                            "value": "Succeeded",
+                            "type": "String"
+                        },
+                        "PipelineName": {
+                            "value": {
+                                "value": "@pipeline().Pipeline",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "RunDate": {
+                            "value": {
+                                "value": "@pipeline().parameters.pRunDate",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "RowsRead": {
+                            "value": {
+                                "value": "@activity('Copy_Customers_To_Stg').output.rowsRead",
+                                "type": "Expression"
+                            },
+                            "type": "Int64"
+                        },
+                        "RowsWritten": {
+                            "value": {
+                                "value": "@activity('Copy_Customers_To_Stg').output.rowsCopied",
+                                "type": "Expression"
+                            },
+                            "type": "Int64"
+                        }
+                    }
+                }
+            },
+            {
+                "name": "SP_LogFailure_Copy",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "Copy_Customers_To_Stg",
+                        "dependencyConditions": [
+                            "Failed"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.00:10:00",
+                    "retry": 2,
+                    "retryIntervalInSeconds": 60,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "linkedServiceName": {
+                    "referenceName": "LS_AzureSql",
+                    "type": "LinkedServiceReference"
+                },
+                "typeProperties": {
+                    "storedProcedureName": "[ops].[usp_LogRunEnd]",
+                    "storedProcedureParameters": {
+                        "RunId": {
+                            "value": {
+                                "value": "@pipeline().RunId",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "Status": {
+                            "value": "Failed",
+                            "type": "String"
+                        },
+                        "FailedActivity": {
+                            "value": "Copy_Customers_To_Stg",
+                            "type": "String"
+                        },
+                        "ErrorCode": {
+                            "value": "ERR_COPY_CUSTOMERS",
+                            "type": "String"
+                        },
+                        "ErrorMessage": {
+                            "value": {
+                                "value": "@activity('Copy_Customers_To_Stg').error.message",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "PipelineName": {
+                            "value": {
+                                "value": "@pipeline().Pipeline",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "RunDate": {
+                            "value": {
+                                "value": "@pipeline().parameters.pRunDate",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        }
+                    }
+                }
+            },
+            {
+                "name": "Fail_Copy",
+                "type": "Fail",
+                "dependsOn": [
+                    {
+                        "activity": "SP_LogFailure_Copy",
+                        "dependencyConditions": [
+                            "Succeeded",
+                            "Failed"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "message": {
+                        "value": "@concat('Copy_Customers_To_Stg failed: ', activity('Copy_Customers_To_Stg').error.message)",
+                        "type": "Expression"
+                    },
+                    "errorCode": "ERR_COPY_CUSTOMERS"
+                }
+            },
+            {
+                "name": "SP_LogFailure_Load",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "SP_Load_DimCustomer",
+                        "dependencyConditions": [
+                            "Failed"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.00:10:00",
+                    "retry": 2,
+                    "retryIntervalInSeconds": 60,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "linkedServiceName": {
+                    "referenceName": "LS_AzureSql",
+                    "type": "LinkedServiceReference"
+                },
+                "typeProperties": {
+                    "storedProcedureName": "[ops].[usp_LogRunEnd]",
+                    "storedProcedureParameters": {
+                        "RunId": {
+                            "value": {
+                                "value": "@pipeline().RunId",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "Status": {
+                            "value": "Failed",
+                            "type": "String"
+                        },
+                        "FailedActivity": {
+                            "value": "SP_Load_DimCustomer",
+                            "type": "String"
+                        },
+                        "ErrorCode": {
+                            "value": "ERR_LOAD_CUSTOMERS",
+                            "type": "String"
+                        },
+                        "ErrorMessage": {
+                            "value": {
+                                "value": "@activity('SP_Load_DimCustomer').error.message",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "PipelineName": {
+                            "value": {
+                                "value": "@pipeline().Pipeline",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "RunDate": {
+                            "value": {
+                                "value": "@pipeline().parameters.pRunDate",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        }
+                    }
+                }
+            },
+            {
+                "name": "Fail_Load",
+                "type": "Fail",
+                "dependsOn": [
+                    {
+                        "activity": "SP_LogFailure_Load",
+                        "dependencyConditions": [
+                            "Succeeded",
+                            "Failed"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "message": {
+                        "value": "@concat('SP_Load_DimCustomer failed: ', activity('SP_Load_DimCustomer').error.message)",
+                        "type": "Expression"
+                    },
+                    "errorCode": "ERR_LOAD_CUSTOMERS"
+                }
+            }
+        ],
+        "parameters": {
+            "pRunDate": {
+                "type": "string",
+                "defaultValue": "20261014"
+            }
+        },
+        "folder": {
+            "name": "Ingest"
+        },
+        "annotations": [
+            "prod-support-lab"
+        ]
+    }
+}

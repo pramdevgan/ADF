@@ -1,0 +1,44 @@
+{
+    "name": "DS_ADLS_Csv",
+    "properties": {
+        "description": "Generic parameterised CSV on ADLS Gen2",
+        "linkedServiceName": {
+            "referenceName": "LS_ADLS",
+            "type": "LinkedServiceReference"
+        },
+        "parameters": {
+            "pContainer": {
+                "type": "string"
+            },
+            "pFolder": {
+                "type": "string"
+            },
+            "pFileName": {
+                "type": "string"
+            }
+        },
+        "type": "DelimitedText",
+        "typeProperties": {
+            "location": {
+                "type": "AzureBlobFSLocation",
+                "fileName": {
+                    "value": "@dataset().pFileName",
+                    "type": "Expression"
+                },
+                "folderPath": {
+                    "value": "@dataset().pFolder",
+                    "type": "Expression"
+                },
+                "fileSystem": {
+                    "value": "@dataset().pContainer",
+                    "type": "Expression"
+                }
+            },
+            "columnDelimiter": ",",
+            "escapeChar": "\\",
+            "firstRowAsHeader": true,
+            "quoteChar": "\""
+        },
+        "schema": []
+    }
+}

@@ -1,0 +1,316 @@
+{
+    "name": "PL_Master_Daily",
+    "properties": {
+        "description": "Orchestrator: customers -> sales -> report. Generic error handler (Upon Failure + Upon Skip on last activity).",
+        "activities": [
+            {
+                "name": "SP_LogStart",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [],
+                "policy": {
+                    "timeout": "0.00:10:00",
+                    "retry": 2,
+                    "retryIntervalInSeconds": 60,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "linkedServiceName": {
+                    "referenceName": "LS_AzureSql",
+                    "type": "LinkedServiceReference"
+                },
+                "typeProperties": {
+                    "storedProcedureName": "[ops].[usp_LogRunStart]",
+                    "storedProcedureParameters": {
+                        "RunId": {
+                            "value": {
+                                "value": "@pipeline().RunId",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "PipelineName": {
+                            "value": {
+                                "value": "@pipeline().Pipeline",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "TriggerName": {
+                            "value": {
+                                "value": "@pipeline().TriggerName",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "RunDate": {
+                            "value": {
+                                "value": "@pipeline().parameters.pRunDate",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        }
+                    }
+                }
+            },
+            {
+                "name": "Exec_Ingest_Customers",
+                "type": "ExecutePipeline",
+                "dependsOn": [
+                    {
+                        "activity": "SP_LogStart",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "pipeline": {
+                        "referenceName": "PL_Ingest_Customers",
+                        "type": "PipelineReference"
+                    },
+                    "waitOnCompletion": true,
+                    "parameters": {
+                        "pRunDate": {
+                            "value": "@pipeline().parameters.pRunDate",
+                            "type": "Expression"
+                        }
+                    }
+                }
+            },
+            {
+                "name": "Exec_Ingest_Sales",
+                "type": "ExecutePipeline",
+                "dependsOn": [
+                    {
+                        "activity": "Exec_Ingest_Customers",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "typeProperties": {
+                    "pipeline": {
+                        "referenceName": "PL_Ingest_Sales",
+                        "type": "PipelineReference"
+                    },
+                    "waitOnCompletion": true,
+                    "parameters": {
+                        "pRunDate": {
+                            "value": "@pipeline().parameters.pRunDate",
+                            "type": "Expression"
+                        }
+                    }
+                }
+            },
+            {
+                "name": "SP_Build_Report",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "Exec_Ingest_Sales",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.00:10:00",
+                    "retry": 2,
+                    "retryIntervalInSeconds": 60,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "linkedServiceName": {
+                    "referenceName": "LS_AzureSql",
+                    "type": "LinkedServiceReference"
+                },
+                "typeProperties": {
+                    "storedProcedureName": "[rpt].[usp_Build_DailySalesSummary]",
+                    "storedProcedureParameters": {
+                        "RunDate": {
+                            "value": {
+                                "value": "@pipeline().parameters.pRunDate",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "RunId": {
+                            "value": {
+                                "value": "@pipeline().RunId",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        }
+                    }
+                }
+            },
+            {
+                "name": "SP_LogSuccess",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "SP_Build_Report",
+                        "dependencyConditions": [
+                            "Succeeded"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.00:10:00",
+                    "retry": 2,
+                    "retryIntervalInSeconds": 60,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "linkedServiceName": {
+                    "referenceName": "LS_AzureSql",
+                    "type": "LinkedServiceReference"
+                },
+                "typeProperties": {
+                    "storedProcedureName": "[ops].[usp_LogRunEnd]",
+                    "storedProcedureParameters": {
+                        "RunId": {
+                            "value": {
+                                "value": "@pipeline().RunId",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "Status": {
+                            "value": "Succeeded",
+                            "type": "String"
+                        },
+                        "PipelineName": {
+                            "value": {
+                                "value": "@pipeline().Pipeline",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "RunDate": {
+                            "value": {
+                                "value": "@pipeline().parameters.pRunDate",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        }
+                    }
+                }
+            },
+            {
+                "name": "SP_LogFailure_Master",
+                "type": "SqlServerStoredProcedure",
+                "dependsOn": [
+                    {
+                        "activity": "SP_Build_Report",
+                        "dependencyConditions": [
+                            "Failed",
+                            "Skipped"
+                        ]
+                    }
+                ],
+                "policy": {
+                    "timeout": "0.00:10:00",
+                    "retry": 2,
+                    "retryIntervalInSeconds": 60,
+                    "secureOutput": false,
+                    "secureInput": false
+                },
+                "userProperties": [],
+                "linkedServiceName": {
+                    "referenceName": "LS_AzureSql",
+                    "type": "LinkedServiceReference"
+                },
+                "typeProperties": {
+                    "storedProcedureName": "[ops].[usp_LogRunEnd]",
+                    "storedProcedureParameters": {
+                        "RunId": {
+                            "value": {
+                                "value": "@pipeline().RunId",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "Status": {
+                            "value": "Failed",
+                            "type": "String"
+                        },
+                        "FailedActivity": {
+                            "value": "see child run / Monitor",
+                            "type": "String"
+                        },
+                        "ErrorCode": {
+                            "value": "ERR_MASTER",
+                            "type": "String"
+                        },
+                        "ErrorMessage": {
+                            "value": {
+                                "value": "@concat('Daily master load failed for business date ', pipeline().parameters.pRunDate, '. Drill into child pipeline runs in ADF Monitor. Master RunId=', pipeline().RunId)",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "PipelineName": {
+                            "value": {
+                                "value": "@pipeline().Pipeline",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        },
+                        "RunDate": {
+                            "value": {
+                                "value": "@pipeline().parameters.pRunDate",
+                                "type": "Expression"
+                            },
+                            "type": "String"
+                        }
+                    }
+                }
+            },
+            {
+                "name": "Fail_Master",
+                "type": "Fail",
+                "dependsOn": [
+                    {
+                        "activity": "SP_LogFailure_Master",
+                        "dependencyConditions": [
+                            "Succeeded",
+                            "Failed"
+                        ]
+                    }
+                ],
+                "userProperties": [],
+                "typeProperties": {
+                    "message": {
+                        "value": "@concat('PL_Master_Daily failed for ', pipeline().parameters.pRunDate, ' - see child run')",
+                        "type": "Expression"
+                    },
+                    "errorCode": "ERR_MASTER"
+                }
+            }
+        ],
+        "parameters": {
+            "pRunDate": {
+                "type": "string",
+                "defaultValue": "20261014"
+            }
+        },
+        "folder": {
+            "name": "Orchestration"
+        },
+        "annotations": [
+            "prod-support-lab"
+        ]
+    }
+}

@@ -1,0 +1,10 @@
+{
+    "name": "LS_KeyVault",
+    "properties": {
+        "type": "AzureKeyVault",
+        "description": "Secrets store. ADF system-assigned managed identity needs 'Key Vault Secrets User' role.",
+        "typeProperties": {
+            "baseUrl": "https://kv-adf-ps-<initials>.vault.azure.net/"
+        }
+    }
+}
